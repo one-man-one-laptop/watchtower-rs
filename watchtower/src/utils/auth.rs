@@ -3,13 +3,15 @@ use actix_web::error::ErrorUnauthorized;
 use futures_util::future::{ok, err, Ready};
 use serde::Deserialize;
 use base64::decode;
+use crate::utils::env;
 
 #[derive(Debug, Deserialize)]
-pub struct AuthorizedReq;
+pub struct AuthorizedReq {
+    pub is_replicated: bool
+}
 
 const UNAUTHORIZED: &str = "Unauthorized";
-const AUTH_USERNAME: &str = env!("AUTH_USERNAME");
-const AUTH_PASSWORD: &str = env!("AUTH_PASSWORD");
+pub const REPLICATION_HEADER: &str = "IsReplicated";
 
 impl FromRequest for AuthorizedReq {
     type Error = Error;
@@ -18,13 +20,18 @@ impl FromRequest for AuthorizedReq {
 
     fn from_request(req: &HttpRequest, _payload: &mut dev::Payload) -> Self::Future {
         match check_auth(req) {
-            Ok(_) => ok(AuthorizedReq {}),
+            Ok(is_replicated) => ok(AuthorizedReq { is_replicated }),
             Err(error) => err(error)
         }
     }
 }
 
-fn check_auth(req: &HttpRequest) -> Result<(), Error> {
+fn check_auth(req: &HttpRequest) -> Result<bool, Error> {
+    let is_replicated = match req.headers().get(REPLICATION_HEADER) {
+        Some(value) => value.to_str().map_err(|_| ErrorUnauthorized(UNAUTHORIZED))?.to_lowercase() == "true",
+        None => false
+    };
+
     match req.headers().get("Authorization") {
         Some(auth) => {
             let mut iter = auth.to_str().map_err(|_| ErrorUnauthorized(UNAUTHORIZED))?.splitn(2, ' ');
@@ -36,8 +43,10 @@ fn check_auth(req: &HttpRequest) -> Result<(), Error> {
             let username = iter.next().ok_or(ErrorUnauthorized(UNAUTHORIZED))?;
             let password = iter.next().ok_or(ErrorUnauthorized(UNAUTHORIZED))?;
 
-            if auth_type == "Basic" && username == AUTH_USERNAME && password == AUTH_PASSWORD {
-                Ok(())
+            let auth = env::get_auth_info();
+
+            if auth_type == "Basic" && username == auth.username && password == auth.password {
+                Ok(is_replicated)
             } else {
                 Err(ErrorUnauthorized(UNAUTHORIZED))
             }

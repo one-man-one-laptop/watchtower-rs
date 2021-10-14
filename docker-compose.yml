@@ -1,0 +1,20 @@
+version: "3.9"
+services:
+  watchtower1:
+    image: "warunyoudejudom/watchtower:0.1.0"
+    ports:
+      - "8088:8080"
+    environment:
+      HOSTNAME: watchtower1:8080
+      CLUSTER_NODES: watchtower1:8080,watchtower2:8080
+      USERNAME: admin
+      PASSWORD: password
+  watchtower2:
+    image: "warunyoudejudom/watchtower:0.1.0"
+    ports:
+      - "8087:8080"
+    environment:
+      HOSTNAME: watchtower2:8080
+      CLUSTER_NODES: watchtower1:8080,watchtower2:8080
+      USERNAME: admin
+      PASSWORD: password

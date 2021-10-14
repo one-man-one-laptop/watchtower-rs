@@ -10,30 +10,26 @@ pub async fn get_all_instances(_: AuthorizedReq, path: web::Path<(String,)>, dat
     }
 }
 
-pub async fn register_instance(_: AuthorizedReq, instance_info: web::Json<InstanceInfo>, path: web::Path<(String,)>, data: web::Data<AppState>) -> Result<HttpResponse> {
+pub async fn register_instance(req: AuthorizedReq, instance_info: web::Json<InstanceInfo>, path: web::Path<(String,)>, data: web::Data<AppState>) -> Result<HttpResponse> {
     let (service_id,) = path.into_inner();
-    data.service_registry.register_instance(&service_id, instance_info.into_inner()).await?;
+    data.service_registry.register_instance(&service_id, instance_info.into_inner(), req.is_replicated).await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
-pub async fn renew_lease(_: AuthorizedReq, path: web::Path<(String, String)>, data: web::Data<AppState>) -> Result<HttpResponse> {
+pub async fn renew_lease(req: AuthorizedReq, path: web::Path<(String, String)>, data: web::Data<AppState>) -> Result<HttpResponse> {
     let (service_id, instance_id) = path.into_inner();
-    match data.service_registry.get_instance(&service_id, &instance_id).await {
-        Some(_) => {
-            data.service_registry.renew_lease(&service_id, &instance_id).await?;
-            Ok(HttpResponse::Ok().finish())
-        }
-        None => Ok(HttpResponse::NotFound().finish())
+
+    if data.service_registry.renew_lease(&service_id, &instance_id, req.is_replicated).await? {
+        Ok(HttpResponse::Ok().finish())
+    } else {
+        Ok(HttpResponse::NotFound().finish())
     }
 }
 
-pub async fn cancel_lease(_: AuthorizedReq, path: web::Path<(String, String)>, data: web::Data<AppState>) -> Result<HttpResponse> {
+pub async fn cancel_lease(req: AuthorizedReq, path: web::Path<(String, String)>, data: web::Data<AppState>) -> Result<HttpResponse> {
     let (service_id, instance_id) = path.into_inner();
-    match data.service_registry.get_instance(&service_id, &instance_id).await {
-        Some(_) => {
-            data.service_registry.cancel_lease(&service_id, &instance_id).await;
-            Ok(HttpResponse::Ok().finish())
-        }
+    match data.service_registry.cancel_lease(&service_id, &instance_id, req.is_replicated).await {
+        Some(_) => Ok(HttpResponse::Ok().finish()),
         None => Ok(HttpResponse::NotFound().finish())
     }
 }

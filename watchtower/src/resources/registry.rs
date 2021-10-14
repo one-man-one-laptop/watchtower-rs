@@ -1,10 +1,12 @@
+use actix::Addr;
 use std::collections::HashMap;
 use rand::Rng;
 use tokio::sync::RwLock;
 use serde::{Serialize, Deserialize};
 use crate::{
     types::Result,
-    utils::time::get_time_since_epoch
+    utils::time::get_time_since_epoch,
+    resources::{Dispatcher, DispatcherMessage}
 };
 
 const LEASE_TTL_SECONDS: u64 = 30;
@@ -40,14 +42,16 @@ pub type LeaseHashMap = HashMap<String, LeaseInfo>;
 
 /// A service registry for storing information about services and their leases.
 pub struct ServiceRegistry {
-    services: RwLock<HashMap<String, LeaseHashMap>>
+    services: RwLock<HashMap<String, LeaseHashMap>>,
+    dispatcher: Addr<Dispatcher>
 }
 
 impl ServiceRegistry {
     /// Creates a `serviceRegistry`.
-    pub fn new() -> ServiceRegistry {
+    pub fn new(dispatcher: Addr<Dispatcher>) -> ServiceRegistry {
         ServiceRegistry {
-            services: RwLock::new(HashMap::new())
+            services: RwLock::new(HashMap::new()),
+            dispatcher
         }
     }
 
@@ -58,7 +62,7 @@ impl ServiceRegistry {
     }
 
     /// Registers a new service.
-    pub async fn register_instance(&self, service_id: &str, instance_info: InstanceInfo) -> Result<()> {
+    pub async fn register_instance(&self, service_id: &str, instance_info: InstanceInfo, is_replicated: bool) -> Result<()> {
         let mut services = self.services.write().await;
         if !services.contains_key(service_id) {
             services.insert(service_id.to_string(), HashMap::new());
@@ -66,34 +70,51 @@ impl ServiceRegistry {
 
         if let Some(service) = services.get_mut(service_id) {
             service.insert(instance_info.instance_id.to_string(), LeaseInfo {
-                instance_info,
+                instance_info: instance_info.clone(),
                 service_id: service_id.to_string(),
                 last_updated_timestamp: get_time_since_epoch()?
             });
+
+            if !is_replicated {
+                self.dispatcher.do_send(DispatcherMessage::Register(service_id.to_string(), instance_info));
+            }
         }
         Ok(())
     }
 
     /// Renews a lease by updating its `last_updated_timestamp`.
     /// 
-    /// If the lease does not exists, this method will do nothing.
-    pub async fn renew_lease(&self, service_id: &str, instance_id: &str) -> Result<()> {
+    /// If the lease does not exists, this method will return false.
+    pub async fn renew_lease(&self, service_id: &str, instance_id: &str, is_replicated: bool) -> Result<bool> {
         let mut services = self.services.write().await;
         if let Some(service) = services.get_mut(service_id) {
             if let Some(lease) = service.get_mut(instance_id) {
                 lease.last_updated_timestamp = get_time_since_epoch()?;
+                if !is_replicated {
+                    self.dispatcher.do_send(DispatcherMessage::Renew(service_id.to_string(), lease.instance_info.clone()));
+                }
+                return Ok(true)
             }
         }
-        Ok(())
+        Ok(false)
     }
 
     /// Cancels a lease by removing it from the `ServiceRegistry`.
     /// 
-    /// If the lease does not exists, this method will do nothing.
-    pub async fn cancel_lease(&self, service_id: &str, instance_id: &str) {
+    /// If the lease does not exists, this method will return None.
+    pub async fn cancel_lease(&self, service_id: &str, instance_id: &str, is_replicated: bool) -> Option<LeaseInfo> {
         let mut services = self.services.write().await;
-        if let Some(service) = services.get_mut(service_id) {
-            service.remove(instance_id);
+        match services.get_mut(service_id) {
+            Some(service) => {
+                let lease_option = service.remove(instance_id);
+                if !is_replicated {   
+                    if let Some(_) = &lease_option {
+                        self.dispatcher.do_send(DispatcherMessage::Cancel(service_id.to_string(), instance_id.to_string()));
+                    }
+                }
+                lease_option
+            },
+            None => None
         }
     }
 
@@ -112,7 +133,7 @@ impl ServiceRegistry {
             expired_leases.swap(i, next);
 
             let lease = &expired_leases[i];
-            self.cancel_lease(&lease.service_id, &lease.instance_info.instance_id).await;
+            self.cancel_lease(&lease.service_id, &lease.instance_info.instance_id, true).await;
         }
         Ok(())
     }
@@ -132,24 +153,11 @@ impl ServiceRegistry {
         Ok(expired_leases)
     }
 
-    /// Returns the `LeaseInfo` of the interested lease.
-    pub async fn get_instance(&self, service_id: &str, instance_id: &str) -> Option<LeaseInfo> {
-        let services = self.services.read().await;
-        if let Some(service) = services.get(service_id) {
-            if let Some(lease) = service.get(instance_id) {
-                Some(lease.clone())
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    } 
-
-    pub async fn get_all_instances(&self, service_id: &str) -> Option<Vec<LeaseInfo>> {
+    /// Returns all the `InstanceInfo` of the interested service.
+    pub async fn get_all_instances(&self, service_id: &str) -> Option<Vec<InstanceInfo>> {
         let services = self.services.read().await;
         if let Some(leases) = services.get(service_id) {
-            Some(leases.values().cloned().collect())
+            Some(leases.values().cloned().map(|lease| lease.instance_info).collect())
         } else {
             None
         }
