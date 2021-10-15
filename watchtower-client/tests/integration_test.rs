@@ -25,8 +25,9 @@ async fn test_register_and_get_service() {
 
     let service_url = watchtower_client.get_service_url(service_id).await.unwrap();
     assert_eq!(service_url, format!("{}:{}", url, port));
-    let sleep_time = std::time::Duration::from_millis(30 * 1000);
+    let sleep_time = std::time::Duration::from_millis(40 * 1000);
     std::thread::sleep(sleep_time);
+    let service_url = watchtower_client.get_service_url(service_id).await.unwrap();
     assert_eq!(service_url, format!("{}:{}", url, port));
     watchtower_client.cancel().await.unwrap();
 }

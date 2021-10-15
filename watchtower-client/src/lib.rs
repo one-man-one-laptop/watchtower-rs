@@ -21,7 +21,7 @@ pub struct WatchtowerClient {
     instance_info: Arc<Mutex<Option<(String, InstanceInfo)>>>,
 }
 
-const HEARTBEAT_INTVERAL_SEC: u64 = 30;
+const HEARTBEAT_INTVERAL_SEC: u64 = 15;
 
 impl WatchtowerClient {
     pub fn new(watchtower_urls: Vec<String>, username: &str, password: &str) -> Self {
@@ -62,7 +62,7 @@ impl WatchtowerClient {
             loop {
                 interval.tick().await;
                 if let Some((_, instance_info)) = &*instance_info.lock().await {
-                    if instance_info.instance_id == new_instance_info.instance_id {
+                    if instance_info.instance_id != new_instance_info.instance_id {
                         return;
                     }
                 }
