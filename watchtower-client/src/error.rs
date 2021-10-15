@@ -5,6 +5,7 @@ pub enum WatchtowerError {
     InternalError,
     NotFound,
     Unauthorized,
+    InstanceAlreadyRegistered,
     MaxRetryReached
 }
 

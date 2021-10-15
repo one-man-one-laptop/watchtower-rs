@@ -112,6 +112,11 @@ impl ServiceRegistry {
                         self.dispatcher.send(DispatcherMessage::Cancel(service_id.to_string(), instance_id.to_string())).await??;
                     }
                 }
+
+                if service.is_empty() {
+                    services.remove(service_id);
+                }
+                
                 Ok(lease_option)
             },
             None => Ok(None)

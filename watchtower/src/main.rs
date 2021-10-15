@@ -15,7 +15,7 @@ use crate::{
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    std::env::set_var("RUST_LOG", "actix_web=trace,watchtower=trace");
+    std::env::set_var("RUST_LOG", "actix_web=info,watchtower=info");
     env_logger::init();
 
     let dispatcher = Dispatcher::new(utils::env::get_cluster_nodes()).start();

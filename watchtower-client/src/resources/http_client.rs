@@ -92,6 +92,32 @@ impl HttpClient {
         Err(Error::MaxRetryReached)
     }
 
+    pub async fn cancel(&self, service_id: &str, instance_info: &InstanceInfo) -> Result<()> {
+        let mut base_url = self.get_new_url().await;
+        let mut attempt = 0;
+
+        while attempt < MAX_ATTEMPT {
+            let url = format!("{}/api/v1/services/{}/{}", base_url, service_id, instance_info.instance_id);
+            match self.client.delete(&url)
+                .basic_auth(&self.username, Some(&self.password))
+                .send().await {
+                Ok(res) => {
+                    if res.status() == reqwest::StatusCode::OK {
+                        return Ok(());
+                    } else {
+                        error!("Unexpected status code: {}", res.status());
+                    }
+                }
+                Err(err) => {
+                    error!("Renew request error: {}", err);
+                    base_url = self.get_new_url().await;
+                    attempt += 1;
+                }
+            }
+        }
+        Err(Error::MaxRetryReached)    
+    }
+
     pub async fn get_all_instances(&self, service_id: &str) -> Result<Vec<InstanceInfo>> {
         let mut base_url = self.get_new_url().await;
         let mut attempt = 0;
