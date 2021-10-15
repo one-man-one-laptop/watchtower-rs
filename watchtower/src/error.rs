@@ -24,6 +24,13 @@ impl From<serde_json::Error> for WatchtowerError {
     }
 }
 
+impl From<actix::MailboxError> for WatchtowerError {
+    fn from(error: actix::MailboxError) -> Self {
+        error!("{}", error);
+        WatchtowerError::InternalError
+    }
+}
+
 impl error::ResponseError for WatchtowerError {
     fn error_response(&self) -> HttpResponse {
         HttpResponseBuilder::new(self.status_code())

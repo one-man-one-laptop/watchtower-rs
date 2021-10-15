@@ -76,7 +76,7 @@ impl ServiceRegistry {
             });
 
             if !is_replicated {
-                self.dispatcher.do_send(DispatcherMessage::Register(service_id.to_string(), instance_info));
+                self.dispatcher.send(DispatcherMessage::Register(service_id.to_string(), instance_info)).await??;
             }
         }
         Ok(())
@@ -91,7 +91,7 @@ impl ServiceRegistry {
             if let Some(lease) = service.get_mut(instance_id) {
                 lease.last_updated_timestamp = get_time_since_epoch()?;
                 if !is_replicated {
-                    self.dispatcher.do_send(DispatcherMessage::Renew(service_id.to_string(), lease.instance_info.clone()));
+                    self.dispatcher.send(DispatcherMessage::Renew(service_id.to_string(), lease.instance_info.clone())).await??;
                 }
                 return Ok(true)
             }
@@ -102,19 +102,19 @@ impl ServiceRegistry {
     /// Cancels a lease by removing it from the `ServiceRegistry`.
     /// 
     /// If the lease does not exists, this method will return None.
-    pub async fn cancel_lease(&self, service_id: &str, instance_id: &str, is_replicated: bool) -> Option<LeaseInfo> {
+    pub async fn cancel_lease(&self, service_id: &str, instance_id: &str, is_replicated: bool) -> Result<Option<LeaseInfo>> {
         let mut services = self.services.write().await;
         match services.get_mut(service_id) {
             Some(service) => {
                 let lease_option = service.remove(instance_id);
                 if !is_replicated {   
                     if let Some(_) = &lease_option {
-                        self.dispatcher.do_send(DispatcherMessage::Cancel(service_id.to_string(), instance_id.to_string()));
+                        self.dispatcher.send(DispatcherMessage::Cancel(service_id.to_string(), instance_id.to_string())).await??;
                     }
                 }
-                lease_option
+                Ok(lease_option)
             },
-            None => None
+            None => Ok(None)
         }
     }
 
@@ -133,7 +133,7 @@ impl ServiceRegistry {
             expired_leases.swap(i, next);
 
             let lease = &expired_leases[i];
-            self.cancel_lease(&lease.service_id, &lease.instance_info.instance_id, true).await;
+            self.cancel_lease(&lease.service_id, &lease.instance_info.instance_id, true).await?;
         }
         Ok(())
     }

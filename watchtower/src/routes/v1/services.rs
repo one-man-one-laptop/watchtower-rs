@@ -28,7 +28,7 @@ pub async fn renew_lease(req: AuthorizedReq, path: web::Path<(String, String)>, 
 
 pub async fn cancel_lease(req: AuthorizedReq, path: web::Path<(String, String)>, data: web::Data<AppState>) -> Result<HttpResponse> {
     let (service_id, instance_id) = path.into_inner();
-    match data.service_registry.cancel_lease(&service_id, &instance_id, req.is_replicated).await {
+    match data.service_registry.cancel_lease(&service_id, &instance_id, req.is_replicated).await? {
         Some(_) => Ok(HttpResponse::Ok().finish()),
         None => Ok(HttpResponse::NotFound().finish())
     }

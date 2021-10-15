@@ -30,5 +30,4 @@ pub fn get_auth_info() -> AuthInfo {
         username: std::env::var("USERNAME").unwrap_or(DEFAULT_USERNAME.to_string()),
         password: std::env::var("PASSWORD").unwrap_or(DEFAULT_PASSWORD.to_string()), 
     }
-    
 }
