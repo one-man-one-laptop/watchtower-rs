@@ -2,5 +2,5 @@
 
 members = [
     "watchtower",
-    "watchtower-client"
+    "watchtower_client",
 ]
