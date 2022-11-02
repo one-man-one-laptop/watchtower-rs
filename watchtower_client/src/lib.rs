@@ -16,11 +16,13 @@ pub use crate::{
     types::{Result, Error},
 };
 
+#[cfg(feature = "py")]
 #[pyclass]
 pub struct PyWatchtowerClient {
     client: Arc<WatchtowerClient>,
 }
 
+#[cfg(feature = "py")]
 #[pymethods]
 impl PyWatchtowerClient {
     #[new]
@@ -72,6 +74,7 @@ impl PyWatchtowerClient {
     }
 }
 
+#[cfg(feature = "py")]
 #[pymodule]
 fn watchtower_client(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyWatchtowerClient>()?;
